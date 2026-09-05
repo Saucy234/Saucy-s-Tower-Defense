@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Tower Defense</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <div id="game-area">
+      <canvas id="canvas" width="750" height="500"></canvas>
+      <div id="overlay" class="hidden">
+        <div id="overlay-message"></div>
+        <button id="restart-btn">Restart</button>
+      </div>
+    </div>
+
+    <div id="sidebar">
+      <h1>Tower Defense</h1>
+
+      <div class="stat-row">
+        <span class="stat-label">Gold</span>
+        <span id="gold-value" class="stat-value">0</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Lives</span>
+        <span id="lives-value" class="stat-value">0</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Wave</span>
+        <span id="wave-value" class="stat-value">0 / 0</span>
+      </div>
+
+      <button id="start-wave-btn">Start Wave</button>
+
+      <h2>Towers</h2>
+      <div id="tower-list"></div>
+
+      <p id="hint">Select a tower, then click an open grid cell to place it.</p>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>
