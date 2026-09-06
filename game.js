@@ -386,7 +386,7 @@
   // Everything is drawn at a fraction of the real resolution onto this
   // offscreen canvas, then blown back up with smoothing disabled — that's
   // what gives the whole scene its chunky pixel-art look.
-  const PIXEL_SCALE = 4;
+  const PIXEL_SCALE = 3;
   const pixelCanvas = document.createElement('canvas');
   pixelCanvas.width = Math.round(canvas.width / PIXEL_SCALE);
   pixelCanvas.height = Math.round(canvas.height / PIXEL_SCALE);
