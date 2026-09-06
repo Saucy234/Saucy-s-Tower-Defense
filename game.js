@@ -50,6 +50,7 @@
     { id: 'archer', name: 'Archer Tower', cost: 50, range: 100, fireRate: 0.15, damage: 8, splash: 0, color: '#8b5a2b', roofColor: '#dcb877', projectileColor: '#f4e4c1' },
     { id: 'cannon', name: 'Cannon Bastion', cost: 100, range: 90, fireRate: 1.2, damage: 40, splash: 45, color: '#6b6f76', roofColor: '#3a3d42', projectileColor: '#2b2b2b' },
     { id: 'mage', name: 'Mage Tower', cost: 150, range: 220, fireRate: 1.8, damage: 70, splash: 0, color: '#4b2e83', roofColor: '#8e5bd6', projectileColor: '#c9a6ff' },
+    { id: 'mine', name: 'Gold Mine', cost: 80, isEconomy: true, income: 5, incomeInterval: 3, color: '#c9a227', roofColor: '#8a6d1a' },
   ];
 
   // ---------- Upgrades ----------
@@ -57,6 +58,7 @@
   const DAMAGE_UPGRADE_STEP = 0.35; // +35% damage per level
   const SPEED_UPGRADE_FACTOR = 0.85; // fire rate cooldown *= 0.85 per level (faster)
   const RANGE_UPGRADE_STEP = 20; // +20px range per level
+  const INCOME_UPGRADE_STEP = 0.4; // +40% income per level
 
   const UPGRADE_STATS = [
     { key: 'damage', label: 'Damage' },
@@ -69,7 +71,6 @@
   }
 
   // ---------- Wave config ----------
-  const TOTAL_WAVES = 10;
   const START_GOLD = 200;
   const START_LIVES = 20;
   const SPAWN_INTERVAL = 0.7; // seconds between enemy spawns within a wave
@@ -179,6 +180,21 @@
     }
   }
 
+  class GoldPopup {
+    constructor(x, y, value) {
+      this.x = x + (Math.random() * 10 - 5);
+      this.y = y;
+      this.value = Math.round(value);
+      this.life = 0.9;
+      this.maxLife = 0.9;
+    }
+
+    update(dt) {
+      this.y -= 16 * dt;
+      this.life -= dt;
+    }
+  }
+
   class Projectile {
     constructor(x, y, target, damage, splash, color) {
       this.x = x;
@@ -246,7 +262,8 @@
       this.y = c.y;
       this.cooldown = 0;
       this.target = null;
-      this.levels = { damage: 0, speed: 0, range: 0 };
+      this.levels = { damage: 0, speed: 0, range: 0, income: 0 };
+      this.incomeTimer = type.incomeInterval || 0;
     }
 
     get damage() {
@@ -259,6 +276,10 @@
 
     get range() {
       return this.type.range + RANGE_UPGRADE_STEP * this.levels.range;
+    }
+
+    get income() {
+      return this.type.income * (1 + INCOME_UPGRADE_STEP * this.levels.income);
     }
 
     update(dt, enemies, projectiles) {
@@ -295,6 +316,11 @@
 
     draw(ctx, showRange) {
       const cx = this.x, cy = this.y;
+
+      if (this.type.isEconomy) {
+        this.drawMine(ctx);
+        return;
+      }
 
       if (showRange) {
         ctx.beginPath();
@@ -377,6 +403,35 @@
         ctx.stroke();
       }
     }
+
+    drawMine(ctx) {
+      const cx = this.x, cy = this.y;
+
+      // dirt mound
+      ctx.beginPath();
+      ctx.arc(cx, cy, 16, Math.PI, 0);
+      ctx.fillStyle = '#6b5a3e';
+      ctx.fill();
+      ctx.fillRect(cx - 16, cy, 32, 8);
+
+      // timber support beams
+      ctx.fillStyle = '#4a3524';
+      ctx.fillRect(cx - 12, cy - 14, 4, 18);
+      ctx.fillRect(cx + 8, cy - 14, 4, 18);
+
+      // dark mine shaft entrance
+      ctx.beginPath();
+      ctx.arc(cx, cy - 2, 8, Math.PI, 0);
+      ctx.fillStyle = '#1c1712';
+      ctx.fill();
+      ctx.fillRect(cx - 8, cy - 2, 16, 10);
+
+      // glinting gold ore
+      ctx.fillStyle = '#ffd23f';
+      ctx.fillRect(cx - 14, cy + 4, 3, 3);
+      ctx.fillRect(cx + 11, cy + 6, 3, 3);
+      ctx.fillRect(cx + 1, cy + 9, 3, 3);
+    }
   }
 
   // ---------- Game state ----------
@@ -413,12 +468,13 @@
     gold: START_GOLD,
     lives: START_LIVES,
     wave: 0,
-    phase: 'idle', // idle | wave | gameover | win
+    phase: 'idle', // idle | wave | gameover
     towers: [],
     towerGrid: Array.from({ length: ROWS }, () => Array(COLS).fill(null)),
     enemies: [],
     projectiles: [],
     damageNumbers: [],
+    goldPopups: [],
     selectedTowerId: null,
     selectedTower: null,
     hoverCell: null,
@@ -440,7 +496,7 @@
           <span class="tower-cost">${type.cost}g</span>
         </span>`;
       btn.addEventListener('click', () => {
-        if (state.phase === 'gameover' || state.phase === 'win') return;
+        if (state.phase === 'gameover') return;
         state.selectedTowerId = state.selectedTowerId === type.id ? null : type.id;
         state.selectedTower = null;
         refreshTowerButtons();
@@ -461,8 +517,8 @@
   function updateStats() {
     goldEl.textContent = state.gold;
     livesEl.textContent = state.lives;
-    waveEl.textContent = `${Math.min(state.wave, TOTAL_WAVES)} / ${TOTAL_WAVES}`;
-    startWaveBtn.disabled = state.phase === 'wave' || state.phase === 'gameover' || state.phase === 'win';
+    waveEl.textContent = state.wave;
+    startWaveBtn.disabled = state.phase === 'wave' || state.phase === 'gameover';
     refreshTowerButtons();
     renderUpgradePanel();
   }
@@ -474,7 +530,11 @@
       return;
     }
 
-    const rows = UPGRADE_STATS.map(stat => {
+    const statsList = tower.type.isEconomy
+      ? [{ key: 'income', label: 'Income' }]
+      : UPGRADE_STATS;
+
+    const rows = statsList.map(stat => {
       const level = tower.levels[stat.key];
       const maxed = level >= UPGRADE_MAX_LEVEL;
       const cost = upgradeCost(tower, stat.key);
@@ -492,9 +552,13 @@
         </div>`;
     }).join('');
 
+    const statsLine = tower.type.isEconomy
+      ? `Income ${tower.income.toFixed(1)}g / ${tower.type.incomeInterval}s`
+      : `DMG ${tower.damage.toFixed(0)} &middot; SPD ${(1 / tower.fireRate).toFixed(1)}/s &middot; RNG ${tower.range.toFixed(0)}`;
+
     upgradePanelEl.innerHTML = `
       <div class="upgrade-tower-name">${tower.type.name} <span class="upgrade-cell">(${tower.col}, ${tower.row})</span></div>
-      <div class="upgrade-stats-line">DMG ${tower.damage.toFixed(0)} &middot; SPD ${(1 / tower.fireRate).toFixed(1)}/s &middot; RNG ${tower.range.toFixed(0)}</div>
+      <div class="upgrade-stats-line">${statsLine}</div>
       ${rows}
     `;
 
@@ -535,7 +599,7 @@
   });
 
   canvas.addEventListener('click', evt => {
-    if (state.phase === 'gameover' || state.phase === 'win') return;
+    if (state.phase === 'gameover') return;
     const { col, row } = canvasCell(evt);
     if (col < 0 || col >= COLS || row < 0 || row >= ROWS) return;
 
@@ -585,6 +649,7 @@
     state.enemies = [];
     state.projectiles = [];
     state.damageNumbers = [];
+    state.goldPopups = [];
     state.selectedTowerId = null;
     state.selectedTower = null;
     state.spawnedThisWave = 0;
@@ -629,19 +694,25 @@
       if (state.lives <= 0) {
         state.lives = 0;
         state.phase = 'gameover';
-        showOverlay('Game Over');
+        showOverlay(`Game Over — Reached Wave ${state.wave}`);
       } else if (state.spawnedThisWave >= targetCount && state.enemies.length === 0) {
-        if (state.wave >= TOTAL_WAVES) {
-          state.phase = 'win';
-          showOverlay('You Win!');
-        } else {
-          state.phase = 'idle';
-        }
+        state.phase = 'idle';
       }
       updateStats();
     }
 
     for (const tower of state.towers) {
+      if (tower.type.isEconomy) {
+        tower.incomeTimer -= dt;
+        if (tower.incomeTimer <= 0) {
+          tower.incomeTimer += tower.type.incomeInterval;
+          const amount = tower.income;
+          state.gold += amount;
+          state.goldPopups.push(new GoldPopup(tower.x, tower.y - 20, amount));
+          updateStats();
+        }
+        continue;
+      }
       tower.update(dt, state.enemies, state.projectiles);
     }
 
@@ -654,6 +725,11 @@
       dn.update(dt);
     }
     state.damageNumbers = state.damageNumbers.filter(dn => dn.life > 0);
+
+    for (const gp of state.goldPopups) {
+      gp.update(dt);
+    }
+    state.goldPopups = state.goldPopups.filter(gp => gp.life > 0);
 
     // Re-check deaths/rewards caused by projectile hits this frame
     for (const enemy of state.enemies) {
@@ -743,7 +819,7 @@
     drawCastleGate(baseC.col, baseC.row);
 
     // hover preview
-    if (state.hoverCell && state.selectedTowerId && state.phase !== 'gameover' && state.phase !== 'win') {
+    if (state.hoverCell && state.selectedTowerId && state.phase !== 'gameover') {
       const { col, row } = state.hoverCell;
       const type = TOWER_TYPES.find(t => t.id === state.selectedTowerId);
       const valid = !isPathCell(col, row) && !state.towerGrid[row][col] && state.gold >= type.cost;
@@ -807,6 +883,15 @@
       screenCtx.fillStyle = `rgba(255,120,90,${alpha})`;
       screenCtx.fillText(`-${dn.value}`, dn.x, dn.y);
     }
+
+    screenCtx.font = 'bold 13px Georgia, serif';
+    for (const gp of state.goldPopups) {
+      const alpha = Math.max(0, gp.life / gp.maxLife);
+      screenCtx.fillStyle = `rgba(0,0,0,${alpha * 0.85})`;
+      screenCtx.fillText(`+${gp.value}g`, gp.x + 0.6, gp.y + 0.6);
+      screenCtx.fillStyle = `rgba(255,215,60,${alpha})`;
+      screenCtx.fillText(`+${gp.value}g`, gp.x, gp.y);
+    }
   }
 
   // ---------- Main loop ----------
@@ -816,7 +901,7 @@
     state.lastTime = timestamp;
     dt = Math.min(dt, 0.05); // clamp to avoid huge jumps on tab-switch
 
-    if (state.phase !== 'gameover' && state.phase !== 'win') {
+    if (state.phase !== 'gameover') {
       update(dt);
     }
     draw();
