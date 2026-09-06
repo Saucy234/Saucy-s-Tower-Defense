@@ -71,18 +71,37 @@
   }
 
   // ---------- Wave config ----------
+  const TOTAL_WAVES = 100;
   const START_GOLD = 200;
   const START_LIVES = 20;
   const SPAWN_INTERVAL = 0.7; // seconds between enemy spawns within a wave
+  const BOSS_WAVE_INTERVAL = 10; // a boss shows up every 10th wave
 
   function waveEnemyCount(wave) {
     return 5 + (wave - 1) * 2;
   }
   function waveEnemyHp(wave) {
-    return 50 + (wave - 1) * 18;
+    // 3x (i.e. 200% more) the original baseline, still scaling up every wave
+    return (50 + (wave - 1) * 18) * 3;
   }
   function waveEnemySpeed(wave) {
     return 60 + (wave - 1) * 4;
+  }
+
+  function isBossWave(wave) {
+    return wave > 0 && wave % BOSS_WAVE_INTERVAL === 0;
+  }
+  function waveTargetCount(wave) {
+    return waveEnemyCount(wave) + (isBossWave(wave) ? 1 : 0);
+  }
+  function waveBossHp(wave) {
+    return 600 + wave * 200;
+  }
+  function waveBossSpeed() {
+    return 40;
+  }
+  function waveBossReward(wave) {
+    return 100 + wave * 15;
   }
 
   // ---------- Entities ----------
@@ -162,6 +181,78 @@
       ctx.fillRect(x - barW / 2, y - r - 10, barW, 5);
       ctx.fillStyle = pct > 0.4 ? '#5a8a3a' : '#c0392b';
       ctx.fillRect(x - barW / 2, y - r - 10, barW * pct, 5);
+    }
+  }
+
+  class Boss extends Enemy {
+    constructor(wave) {
+      super(wave);
+      this.maxHp = waveBossHp(wave);
+      this.hp = this.maxHp;
+      this.speed = waveBossSpeed(wave);
+      this.reward = waveBossReward(wave);
+      this.radius = 22;
+      this.isBoss = true;
+    }
+
+    draw(ctx) {
+      const x = this.x, y = this.y, r = this.radius;
+
+      // trailing cape
+      ctx.fillStyle = '#3a0e0e';
+      ctx.beginPath();
+      ctx.moveTo(x - r * 0.8, y + r * 0.3);
+      ctx.lineTo(x - r * 1.3, y + r * 1.3);
+      ctx.lineTo(x + r * 1.3, y + r * 1.3);
+      ctx.lineTo(x + r * 0.8, y + r * 0.3);
+      ctx.closePath();
+      ctx.fill();
+
+      // armored body
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fillStyle = '#1c1712';
+      ctx.fill();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#8b0000';
+      ctx.stroke();
+
+      // steel helm
+      ctx.beginPath();
+      ctx.arc(x, y - 4, r * 0.75, Math.PI, 0);
+      ctx.fillStyle = '#4a4a4a';
+      ctx.fill();
+      ctx.strokeStyle = '#1c1712';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // horns
+      ctx.fillStyle = '#2b2b2b';
+      ctx.beginPath();
+      ctx.moveTo(x - r * 0.6, y - r * 0.6);
+      ctx.lineTo(x - r * 0.9, y - r * 1.4);
+      ctx.lineTo(x - r * 0.3, y - r * 0.7);
+      ctx.closePath();
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(x + r * 0.6, y - r * 0.6);
+      ctx.lineTo(x + r * 0.9, y - r * 1.4);
+      ctx.lineTo(x + r * 0.3, y - r * 0.7);
+      ctx.closePath();
+      ctx.fill();
+
+      // glowing eyes
+      ctx.fillStyle = '#ff2b2b';
+      ctx.fillRect(x - 8, y - 2, 4, 4);
+      ctx.fillRect(x + 4, y - 2, 4, 4);
+
+      // wide health bar
+      const barW = 44;
+      const pct = Math.max(0, this.hp / this.maxHp);
+      ctx.fillStyle = '#2b1c12';
+      ctx.fillRect(x - barW / 2, y - r - 14, barW, 6);
+      ctx.fillStyle = '#c0392b';
+      ctx.fillRect(x - barW / 2, y - r - 14, barW * pct, 6);
     }
   }
 
@@ -468,7 +559,7 @@
     gold: START_GOLD,
     lives: START_LIVES,
     wave: 0,
-    phase: 'idle', // idle | wave | gameover
+    phase: 'idle', // idle | wave | gameover | win
     towers: [],
     towerGrid: Array.from({ length: ROWS }, () => Array(COLS).fill(null)),
     enemies: [],
@@ -496,7 +587,7 @@
           <span class="tower-cost">${type.cost}g</span>
         </span>`;
       btn.addEventListener('click', () => {
-        if (state.phase === 'gameover') return;
+        if (state.phase === 'gameover' || state.phase === 'win') return;
         state.selectedTowerId = state.selectedTowerId === type.id ? null : type.id;
         state.selectedTower = null;
         refreshTowerButtons();
@@ -517,8 +608,12 @@
   function updateStats() {
     goldEl.textContent = state.gold;
     livesEl.textContent = state.lives;
-    waveEl.textContent = state.wave;
-    startWaveBtn.disabled = state.phase === 'wave' || state.phase === 'gameover';
+    waveEl.textContent = `${Math.min(state.wave, TOTAL_WAVES)} / ${TOTAL_WAVES}`;
+    waveEl.classList.toggle('boss-wave', isBossWave(state.wave) && state.phase === 'wave');
+    startWaveBtn.disabled = state.phase === 'wave' || state.phase === 'gameover' || state.phase === 'win';
+    startWaveBtn.textContent = isBossWave(state.wave + 1) && state.phase === 'idle'
+      ? 'Start Boss Wave ⚔'
+      : 'Start Wave';
     refreshTowerButtons();
     renderUpgradePanel();
   }
@@ -599,7 +694,7 @@
   });
 
   canvas.addEventListener('click', evt => {
-    if (state.phase === 'gameover') return;
+    if (state.phase === 'gameover' || state.phase === 'win') return;
     const { col, row } = canvasCell(evt);
     if (col < 0 || col >= COLS || row < 0 || row >= ROWS) return;
 
@@ -666,10 +761,11 @@
   // ---------- Update ----------
   function update(dt) {
     if (state.phase === 'wave') {
-      const targetCount = waveEnemyCount(state.wave);
+      const targetCount = waveTargetCount(state.wave);
       state.spawnTimer -= dt;
       if (state.spawnedThisWave < targetCount && state.spawnTimer <= 0) {
-        state.enemies.push(new Enemy(state.wave));
+        const isBossSpawn = isBossWave(state.wave) && state.spawnedThisWave === targetCount - 1;
+        state.enemies.push(isBossSpawn ? new Boss(state.wave) : new Enemy(state.wave));
         state.spawnedThisWave++;
         state.spawnTimer = SPAWN_INTERVAL;
       }
@@ -696,7 +792,12 @@
         state.phase = 'gameover';
         showOverlay(`Game Over — Reached Wave ${state.wave}`);
       } else if (state.spawnedThisWave >= targetCount && state.enemies.length === 0) {
-        state.phase = 'idle';
+        if (state.wave >= TOTAL_WAVES) {
+          state.phase = 'win';
+          showOverlay('Victory! The Kingdom is Saved!');
+        } else {
+          state.phase = 'idle';
+        }
       }
       updateStats();
     }
@@ -819,7 +920,7 @@
     drawCastleGate(baseC.col, baseC.row);
 
     // hover preview
-    if (state.hoverCell && state.selectedTowerId && state.phase !== 'gameover') {
+    if (state.hoverCell && state.selectedTowerId && state.phase !== 'gameover' && state.phase !== 'win') {
       const { col, row } = state.hoverCell;
       const type = TOWER_TYPES.find(t => t.id === state.selectedTowerId);
       const valid = !isPathCell(col, row) && !state.towerGrid[row][col] && state.gold >= type.cost;
@@ -901,7 +1002,7 @@
     state.lastTime = timestamp;
     dt = Math.min(dt, 0.05); // clamp to avoid huge jumps on tab-switch
 
-    if (state.phase !== 'gameover') {
+    if (state.phase !== 'gameover' && state.phase !== 'win') {
       update(dt);
     }
     draw();

@@ -132,6 +132,11 @@ body {
   color: #f4e4c1;
 }
 
+.stat-value.boss-wave {
+  color: #ff4d4d;
+  text-shadow: 0 0 6px rgba(255, 77, 77, 0.6);
+}
+
 #tower-list {
   display: flex;
   flex-direction: column;

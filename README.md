@@ -21,9 +21,9 @@ That's it — the game runs entirely client-side.
 
 1. Select a tower from the sidebar (**Archer Tower**, **Cannon Bastion**, **Mage Tower**, or **Gold Mine**).
 2. Click an open grid cell to garrison it (can't build on the enemy path or on top of another tower).
-3. Click **Start Wave** to send raiders down the road toward your gate. Waves are endless and keep getting harder — there's no final wave, just how far you can survive.
-4. Earn gold for each raider defeated, spend it on more towers.
-5. Lose a life for every raider that reaches your castle gate. Run out of lives and it's game over — the overlay shows the wave you reached.
+3. Click **Start Wave** to send raiders down the road toward your gate. There are 100 waves, and every 10th (10, 20, 30…) ends with a tough boss — regular mobs also carry 200% more health than the base amount, and both get harder every wave.
+4. Earn gold for each raider (or boss) defeated, spend it on more towers.
+5. Lose a life for every raider that reaches your castle gate. Run out of lives and it's game over — the overlay shows the wave you reached. Survive and defeat the boss on wave 100 to win.
 6. Click a tower you've already placed to select it and upgrade it — combat towers get **Damage**, **Fire Speed**, and **Range**; the Gold Mine gets **Income**. Each stat has 3 levels, with rising gold costs.
 
 | Tower | Cost | Style |
