@@ -1,6 +1,6 @@
-# Tower Defense
+# Castle Defense
 
-A minimal 2D tower defense prototype built with plain HTML5 Canvas and vanilla JavaScript — no frameworks, no build step, no dependencies.
+A minimal 2D tower defense prototype with a pixelated medieval theme, built with plain HTML5 Canvas and vanilla JavaScript — no frameworks, no build step, no dependencies. The whole scene is rendered at a fraction of its resolution and scaled back up unsmoothed for a chunky pixel-art look, and each tower is a distinct castle turret.
 
 ## Setup
 
@@ -19,17 +19,18 @@ That's it — the game runs entirely client-side.
 
 ## How to play
 
-1. Select a tower from the sidebar (**Gatling**, **Cannon**, or **Sniper**).
-2. Click an open grid cell to place it (can't place on the enemy path or on top of another tower).
-3. Click **Start Wave** to send enemies down the path.
-4. Earn gold for each enemy killed, spend it on more towers.
-5. Lose a life for every enemy that reaches the end of the path. Survive all 10 waves to win; run out of lives and it's game over.
+1. Select a tower from the sidebar (**Archer Tower**, **Cannon Bastion**, or **Mage Tower**).
+2. Click an open grid cell to garrison it (can't build on the enemy path or on top of another tower).
+3. Click **Start Wave** to send raiders down the road toward your gate.
+4. Earn gold for each raider defeated, spend it on more towers.
+5. Lose a life for every raider that reaches your castle gate. Survive all 10 waves to win; run out of lives and it's game over.
+6. Click a tower you've already placed to select it and upgrade its **Damage**, **Fire Speed**, or **Range** — each stat has 3 levels, with rising gold costs.
 
 | Tower | Cost | Style |
 |---|---|---|
-| Gatling | 50g | Fast fire rate, low damage, short range |
-| Cannon | 100g | Slow, high damage, small splash radius |
-| Sniper | 150g | Long range, high damage, slow fire rate |
+| Archer Tower | 50g | Fast fire rate, low damage, short range |
+| Cannon Bastion | 100g | Slow, high damage, small splash radius |
+| Mage Tower | 150g | Long range, high damage, slow fire rate |
 
 ## Files
 

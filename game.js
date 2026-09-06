@@ -47,10 +47,26 @@
 
   // ---------- Tower definitions ----------
   const TOWER_TYPES = [
-    { id: 'gatling', name: 'Gatling', cost: 50, range: 100, fireRate: 0.15, damage: 8, splash: 0, color: '#ffb703', projectileColor: '#ffe08a' },
-    { id: 'cannon', name: 'Cannon', cost: 100, range: 90, fireRate: 1.2, damage: 40, splash: 45, color: '#6c757d', projectileColor: '#cfd4da' },
-    { id: 'sniper', name: 'Sniper', cost: 150, range: 220, fireRate: 1.8, damage: 70, splash: 0, color: '#9d4edd', projectileColor: '#d9b8fa' },
+    { id: 'archer', name: 'Archer Tower', cost: 50, range: 100, fireRate: 0.15, damage: 8, splash: 0, color: '#8b5a2b', roofColor: '#dcb877', projectileColor: '#f4e4c1' },
+    { id: 'cannon', name: 'Cannon Bastion', cost: 100, range: 90, fireRate: 1.2, damage: 40, splash: 45, color: '#6b6f76', roofColor: '#3a3d42', projectileColor: '#2b2b2b' },
+    { id: 'mage', name: 'Mage Tower', cost: 150, range: 220, fireRate: 1.8, damage: 70, splash: 0, color: '#4b2e83', roofColor: '#8e5bd6', projectileColor: '#c9a6ff' },
   ];
+
+  // ---------- Upgrades ----------
+  const UPGRADE_MAX_LEVEL = 3;
+  const DAMAGE_UPGRADE_STEP = 0.35; // +35% damage per level
+  const SPEED_UPGRADE_FACTOR = 0.85; // fire rate cooldown *= 0.85 per level (faster)
+  const RANGE_UPGRADE_STEP = 20; // +20px range per level
+
+  const UPGRADE_STATS = [
+    { key: 'damage', label: 'Damage' },
+    { key: 'speed', label: 'Fire Speed' },
+    { key: 'range', label: 'Range' },
+  ];
+
+  function upgradeCost(tower, key) {
+    return Math.round(tower.type.cost * 0.6 * (tower.levels[key] + 1));
+  }
 
   // ---------- Wave config ----------
   const TOTAL_WAVES = 10;
@@ -114,20 +130,37 @@
     }
 
     draw(ctx) {
+      const x = this.x, y = this.y, r = this.radius;
+
+      // raider body
       ctx.beginPath();
-      ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-      ctx.fillStyle = '#e63946';
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fillStyle = '#7a2626';
       ctx.fill();
       ctx.lineWidth = 2;
-      ctx.strokeStyle = '#7a0d15';
+      ctx.strokeStyle = '#3a0e0e';
       ctx.stroke();
+
+      // iron helm
+      ctx.beginPath();
+      ctx.arc(x, y - 3, r * 0.75, Math.PI, 0);
+      ctx.fillStyle = '#5a5a5a';
+      ctx.fill();
+      ctx.strokeStyle = '#2b2b2b';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // glowing eyes
+      ctx.fillStyle = '#ffcf4d';
+      ctx.fillRect(x - 5, y - 1, 3, 3);
+      ctx.fillRect(x + 2, y - 1, 3, 3);
 
       const barW = 26;
       const pct = Math.max(0, this.hp / this.maxHp);
-      ctx.fillStyle = '#333';
-      ctx.fillRect(this.x - barW / 2, this.y - this.radius - 10, barW, 5);
-      ctx.fillStyle = pct > 0.4 ? '#4caf50' : '#e63946';
-      ctx.fillRect(this.x - barW / 2, this.y - this.radius - 10, barW * pct, 5);
+      ctx.fillStyle = '#2b1c12';
+      ctx.fillRect(x - barW / 2, y - r - 10, barW, 5);
+      ctx.fillStyle = pct > 0.4 ? '#5a8a3a' : '#c0392b';
+      ctx.fillRect(x - barW / 2, y - r - 10, barW * pct, 5);
     }
   }
 
@@ -196,6 +229,19 @@
       this.y = c.y;
       this.cooldown = 0;
       this.target = null;
+      this.levels = { damage: 0, speed: 0, range: 0 };
+    }
+
+    get damage() {
+      return this.type.damage * (1 + DAMAGE_UPGRADE_STEP * this.levels.damage);
+    }
+
+    get fireRate() {
+      return this.type.fireRate * Math.pow(SPEED_UPGRADE_FACTOR, this.levels.speed);
+    }
+
+    get range() {
+      return this.type.range + RANGE_UPGRADE_STEP * this.levels.range;
     }
 
     update(dt, enemies, projectiles) {
@@ -207,13 +253,13 @@
         this.target = this.acquireTarget(enemies);
       }
       if (this.target && this.cooldown <= 0) {
-        this.cooldown = this.type.fireRate;
-        projectiles.push(new Projectile(this.x, this.y, this.target, this.type.damage, this.type.splash, this.type.projectileColor));
+        this.cooldown = this.fireRate;
+        projectiles.push(new Projectile(this.x, this.y, this.target, this.damage, this.type.splash, this.type.projectileColor));
       }
     }
 
     outOfRange(enemy) {
-      return Math.hypot(enemy.x - this.x, enemy.y - this.y) > this.type.range;
+      return Math.hypot(enemy.x - this.x, enemy.y - this.y) > this.range;
     }
 
     acquireTarget(enemies) {
@@ -231,28 +277,84 @@
     }
 
     draw(ctx, showRange) {
+      const cx = this.x, cy = this.y;
+
       if (showRange) {
         ctx.beginPath();
-        ctx.arc(this.x, this.y, this.type.range, 0, Math.PI * 2);
+        ctx.arc(cx, cy, this.range, 0, Math.PI * 2);
         ctx.fillStyle = 'rgba(255,255,255,0.08)';
         ctx.fill();
         ctx.strokeStyle = 'rgba(255,255,255,0.35)';
         ctx.stroke();
       }
-      ctx.fillStyle = '#3d3d3d';
-      ctx.fillRect(this.x - CELL / 2 + 4, this.y - CELL / 2 + 4, CELL - 8, CELL - 8);
 
+      // stone foundation slab
+      const base = CELL - 12;
+      ctx.fillStyle = '#4a4038';
+      ctx.fillRect(cx - base / 2, cy - base / 2, base, base);
+
+      // crenellations ringing the turret (castle battlements)
       ctx.fillStyle = this.type.color;
+      const merlonCount = 8;
+      const merlonR = base / 2 - 1;
+      for (let i = 0; i < merlonCount; i++) {
+        const angle = (i / merlonCount) * Math.PI * 2;
+        const mx = cx + Math.cos(angle) * merlonR - 3;
+        const my = cy + Math.sin(angle) * merlonR - 3;
+        ctx.fillRect(mx, my, 6, 6);
+      }
+
+      // turret body
       ctx.beginPath();
-      ctx.arc(this.x, this.y, 14, 0, Math.PI * 2);
+      ctx.arc(cx, cy, 14, 0, Math.PI * 2);
       ctx.fill();
       ctx.lineWidth = 2;
-      ctx.strokeStyle = '#222';
+      ctx.strokeStyle = '#2b2b2b';
       ctx.stroke();
+
+      // roof / accent
+      ctx.beginPath();
+      ctx.arc(cx, cy, 8, 0, Math.PI * 2);
+      ctx.fillStyle = this.type.roofColor;
+      ctx.fill();
+
+      // per-type flourish
+      if (this.type.id === 'archer') {
+        ctx.strokeStyle = '#3a2a1a';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy - 14);
+        ctx.lineTo(cx, cy - 24);
+        ctx.stroke();
+        ctx.fillStyle = '#c0392b';
+        ctx.beginPath();
+        ctx.moveTo(cx, cy - 24);
+        ctx.lineTo(cx + 10, cy - 20);
+        ctx.lineTo(cx, cy - 16);
+        ctx.closePath();
+        ctx.fill();
+      } else if (this.type.id === 'cannon') {
+        const angle = this.target ? Math.atan2(this.target.y - cy, this.target.x - cx) : -Math.PI / 2;
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(angle);
+        ctx.fillStyle = '#2b2b2b';
+        ctx.fillRect(0, -3, 17, 6);
+        ctx.restore();
+      } else if (this.type.id === 'mage') {
+        ctx.beginPath();
+        ctx.arc(cx, cy - 2, 8, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(230,217,255,0.3)';
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(cx, cy - 2, 4, 0, Math.PI * 2);
+        ctx.fillStyle = '#e6d9ff';
+        ctx.fill();
+      }
 
       if (this.target) {
         ctx.beginPath();
-        ctx.moveTo(this.x, this.y);
+        ctx.moveTo(cx, cy);
         ctx.lineTo(this.target.x, this.target.y);
         ctx.strokeStyle = 'rgba(255,255,255,0.15)';
         ctx.stroke();
@@ -262,13 +364,30 @@
 
   // ---------- Game state ----------
   const canvas = document.getElementById('canvas');
-  const ctx = canvas.getContext('2d');
+  const screenCtx = canvas.getContext('2d');
+
+  // Everything is drawn at a fraction of the real resolution onto this
+  // offscreen canvas, then blown back up with smoothing disabled — that's
+  // what gives the whole scene its chunky pixel-art look.
+  const PIXEL_SCALE = 4;
+  const pixelCanvas = document.createElement('canvas');
+  pixelCanvas.width = Math.round(canvas.width / PIXEL_SCALE);
+  pixelCanvas.height = Math.round(canvas.height / PIXEL_SCALE);
+  const ctx = pixelCanvas.getContext('2d');
+  ctx.scale(1 / PIXEL_SCALE, 1 / PIXEL_SCALE);
+
+  function hashCell(col, row) {
+    let h = (col * 374761393 + row * 668265263) ^ (col * row * 2246822519);
+    h = Math.imul(h ^ (h >>> 13), 1274126177);
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
+  }
 
   const goldEl = document.getElementById('gold-value');
   const livesEl = document.getElementById('lives-value');
   const waveEl = document.getElementById('wave-value');
   const startWaveBtn = document.getElementById('start-wave-btn');
   const towerListEl = document.getElementById('tower-list');
+  const upgradePanelEl = document.getElementById('upgrade-panel');
   const overlayEl = document.getElementById('overlay');
   const overlayMessageEl = document.getElementById('overlay-message');
   const restartBtn = document.getElementById('restart-btn');
@@ -283,6 +402,7 @@
     enemies: [],
     projectiles: [],
     selectedTowerId: null,
+    selectedTower: null,
     hoverCell: null,
     spawnedThisWave: 0,
     spawnTimer: 0,
@@ -304,7 +424,9 @@
       btn.addEventListener('click', () => {
         if (state.phase === 'gameover' || state.phase === 'win') return;
         state.selectedTowerId = state.selectedTowerId === type.id ? null : type.id;
+        state.selectedTower = null;
         refreshTowerButtons();
+        renderUpgradePanel();
       });
       towerListEl.appendChild(btn);
     }
@@ -324,6 +446,50 @@
     waveEl.textContent = `${Math.min(state.wave, TOTAL_WAVES)} / ${TOTAL_WAVES}`;
     startWaveBtn.disabled = state.phase === 'wave' || state.phase === 'gameover' || state.phase === 'win';
     refreshTowerButtons();
+    renderUpgradePanel();
+  }
+
+  function renderUpgradePanel() {
+    const tower = state.selectedTower;
+    if (!tower) {
+      upgradePanelEl.innerHTML = '<p class="muted">Click a placed tower to upgrade it.</p>';
+      return;
+    }
+
+    const rows = UPGRADE_STATS.map(stat => {
+      const level = tower.levels[stat.key];
+      const maxed = level >= UPGRADE_MAX_LEVEL;
+      const cost = upgradeCost(tower, stat.key);
+      const afford = state.gold >= cost;
+      const dots = '●'.repeat(level) + '○'.repeat(UPGRADE_MAX_LEVEL - level);
+      return `
+        <div class="upgrade-row">
+          <div class="upgrade-row-top">
+            <span>${stat.label}</span>
+            <span class="upgrade-dots">${dots}</span>
+          </div>
+          <button class="upgrade-btn" data-stat="${stat.key}" ${maxed || !afford ? 'disabled' : ''}>
+            ${maxed ? 'Max Level' : `Upgrade (${cost}g)`}
+          </button>
+        </div>`;
+    }).join('');
+
+    upgradePanelEl.innerHTML = `
+      <div class="upgrade-tower-name">${tower.type.name} <span class="upgrade-cell">(${tower.col}, ${tower.row})</span></div>
+      <div class="upgrade-stats-line">DMG ${tower.damage.toFixed(0)} &middot; SPD ${(1 / tower.fireRate).toFixed(1)}/s &middot; RNG ${tower.range.toFixed(0)}</div>
+      ${rows}
+    `;
+
+    for (const btn of upgradePanelEl.querySelectorAll('.upgrade-btn')) {
+      btn.addEventListener('click', () => {
+        const stat = btn.dataset.stat;
+        const cost = upgradeCost(tower, stat);
+        if (tower.levels[stat] >= UPGRADE_MAX_LEVEL || state.gold < cost) return;
+        state.gold -= cost;
+        tower.levels[stat]++;
+        updateStats();
+      });
+    }
   }
 
   function canvasCell(evt) {
@@ -354,11 +520,23 @@
     if (state.phase === 'gameover' || state.phase === 'win') return;
     const { col, row } = canvasCell(evt);
     if (col < 0 || col >= COLS || row < 0 || row >= ROWS) return;
-    if (!state.selectedTowerId) return;
+
+    const existing = state.towerGrid[row][col];
+    if (existing) {
+      state.selectedTower = existing;
+      state.selectedTowerId = null;
+      updateStats();
+      return;
+    }
+
+    if (!state.selectedTowerId) {
+      state.selectedTower = null;
+      renderUpgradePanel();
+      return;
+    }
 
     const type = TOWER_TYPES.find(t => t.id === state.selectedTowerId);
     if (isPathCell(col, row)) return;
-    if (state.towerGrid[row][col]) return;
     if (state.gold < type.cost) return;
 
     const tower = new Tower(type, col, row);
@@ -389,6 +567,7 @@
     state.enemies = [];
     state.projectiles = [];
     state.selectedTowerId = null;
+    state.selectedTower = null;
     state.spawnedThisWave = 0;
     state.spawnTimer = 0;
     overlayEl.classList.add('hidden');
@@ -462,37 +641,82 @@
   }
 
   // ---------- Draw ----------
+  const GRASS_SHADES = ['#3f6b2f', '#3a6329', '#457234'];
+  const STONE_SHADES = ['#8a7a63', '#83735c', '#8f7f68'];
+
+  function drawField() {
+    for (let row = 0; row < ROWS; row++) {
+      for (let col = 0; col < COLS; col++) {
+        const h = hashCell(col, row);
+        if (isPathCell(col, row)) {
+          ctx.fillStyle = STONE_SHADES[Math.floor(h * STONE_SHADES.length)];
+          ctx.fillRect(col * CELL, row * CELL, CELL, CELL);
+          // cobblestone grout lines
+          ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+          ctx.lineWidth = 1;
+          const offset = (row % 2 === 0) ? 0 : CELL / 2;
+          ctx.beginPath();
+          ctx.moveTo(col * CELL + offset, row * CELL);
+          ctx.lineTo(col * CELL + offset, row * CELL + CELL);
+          ctx.moveTo(col * CELL, row * CELL + CELL / 2);
+          ctx.lineTo(col * CELL + CELL, row * CELL + CELL / 2);
+          ctx.stroke();
+        } else {
+          ctx.fillStyle = GRASS_SHADES[Math.floor(h * GRASS_SHADES.length)];
+          ctx.fillRect(col * CELL, row * CELL, CELL, CELL);
+          // sparse tufts of grass texture
+          if (h > 0.6) {
+            ctx.fillStyle = 'rgba(0,0,0,0.12)';
+            ctx.fillRect(col * CELL + 10, row * CELL + 30, 6, 6);
+            ctx.fillRect(col * CELL + 30, row * CELL + 12, 6, 6);
+          }
+        }
+      }
+    }
+  }
+
+  function drawCastleGate(col, row) {
+    const x = col * CELL, y = row * CELL;
+    ctx.fillStyle = '#5b5147';
+    ctx.fillRect(x + 4, y + 4, CELL - 8, CELL - 8);
+    ctx.fillStyle = '#6b6f76';
+    ctx.fillRect(x + 4, y + 4, 12, CELL - 8);
+    ctx.fillRect(x + CELL - 16, y + 4, 12, CELL - 8);
+    for (let i = 0; i < 3; i++) {
+      ctx.fillRect(x + 6 + i * 4, y, 3, 6);
+      ctx.fillRect(x + CELL - 18 + i * 4, y, 3, 6);
+    }
+    ctx.fillStyle = '#1c1712';
+    ctx.fillRect(x + CELL / 2 - 7, y + 16, 14, CELL - 20);
+  }
+
+  function drawCamp(col, row) {
+    const x = col * CELL + CELL / 2, y = row * CELL + CELL / 2;
+    const trees = [
+      { dx: -14, dy: -10, s: 10, c: '#2f4d22' },
+      { dx: 12, dy: -12, s: 12, c: '#274420' },
+      { dx: -4, dy: 10, s: 11, c: '#345c28' },
+    ];
+    for (const t of trees) {
+      ctx.beginPath();
+      ctx.moveTo(x + t.dx, y + t.dy - t.s);
+      ctx.lineTo(x + t.dx - t.s * 0.7, y + t.dy + t.s * 0.6);
+      ctx.lineTo(x + t.dx + t.s * 0.7, y + t.dy + t.s * 0.6);
+      ctx.closePath();
+      ctx.fillStyle = t.c;
+      ctx.fill();
+    }
+  }
+
   function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // grid
-    ctx.strokeStyle = 'rgba(0,0,0,0.08)';
-    for (let c = 0; c <= COLS; c++) {
-      ctx.beginPath();
-      ctx.moveTo(c * CELL, 0);
-      ctx.lineTo(c * CELL, ROWS * CELL);
-      ctx.stroke();
-    }
-    for (let r = 0; r <= ROWS; r++) {
-      ctx.beginPath();
-      ctx.moveTo(0, r * CELL);
-      ctx.lineTo(COLS * CELL, r * CELL);
-      ctx.stroke();
-    }
+    drawField();
 
-    // path
-    for (const key of PATH_CELLS) {
-      const [col, row] = key.split(',').map(Number);
-      ctx.fillStyle = '#c9a66b';
-      ctx.fillRect(col * CELL, row * CELL, CELL, CELL);
-    }
-    // spawn + base markers
     const spawnC = WAYPOINT_CELLS[0];
     const baseC = WAYPOINT_CELLS[WAYPOINT_CELLS.length - 1];
-    ctx.fillStyle = 'rgba(76,175,80,0.6)';
-    ctx.fillRect(spawnC.col * CELL, spawnC.row * CELL, CELL, CELL);
-    ctx.fillStyle = 'rgba(230,57,70,0.6)';
-    ctx.fillRect(baseC.col * CELL, baseC.row * CELL, CELL, CELL);
+    drawCamp(spawnC.col, spawnC.row);
+    drawCastleGate(baseC.col, baseC.row);
 
     // hover preview
     if (state.hoverCell && state.selectedTowerId && state.phase !== 'gameover' && state.phase !== 'win') {
@@ -514,7 +738,13 @@
     // towers
     for (const tower of state.towers) {
       const isHovered = state.hoverCell && state.hoverCell.col === tower.col && state.hoverCell.row === tower.row;
-      tower.draw(ctx, isHovered && !state.selectedTowerId);
+      const isSelected = tower === state.selectedTower;
+      tower.draw(ctx, (isHovered || isSelected) && !state.selectedTowerId);
+      if (isSelected) {
+        ctx.strokeStyle = '#d4af37';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(tower.col * CELL + 2, tower.row * CELL + 2, CELL - 4, CELL - 4);
+      }
     }
 
     // enemies
@@ -526,6 +756,11 @@
     for (const p of state.projectiles) {
       p.draw(ctx);
     }
+
+    // blow the low-res scene back up onto the real canvas, blocky and unsmoothed
+    screenCtx.imageSmoothingEnabled = false;
+    screenCtx.clearRect(0, 0, canvas.width, canvas.height);
+    screenCtx.drawImage(pixelCanvas, 0, 0, pixelCanvas.width, pixelCanvas.height, 0, 0, canvas.width, canvas.height);
   }
 
   // ---------- Main loop ----------
