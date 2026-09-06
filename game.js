@@ -164,6 +164,21 @@
     }
   }
 
+  class DamageNumber {
+    constructor(x, y, value) {
+      this.x = x + (Math.random() * 10 - 5);
+      this.y = y;
+      this.value = Math.round(value);
+      this.life = 0.6;
+      this.maxLife = 0.6;
+    }
+
+    update(dt) {
+      this.y -= 22 * dt;
+      this.life -= dt;
+    }
+  }
+
   class Projectile {
     constructor(x, y, target, damage, splash, color) {
       this.x = x;
@@ -178,7 +193,7 @@
       this.impactY = target.y;
     }
 
-    update(dt, enemies) {
+    update(dt, enemies, damageNumbers) {
       if (!this.target.dead) {
         this.impactX = this.target.x;
         this.impactY = this.target.y;
@@ -190,7 +205,7 @@
       if (dist <= step) {
         this.x = this.impactX;
         this.y = this.impactY;
-        this.hit(enemies);
+        this.hit(enemies, damageNumbers);
         this.done = true;
       } else {
         this.x += (dx / dist) * step;
@@ -198,16 +213,18 @@
       }
     }
 
-    hit(enemies) {
+    hit(enemies, damageNumbers) {
       if (this.splash > 0) {
         for (const e of enemies) {
           if (e.dead) continue;
           if (Math.hypot(e.x - this.impactX, e.y - this.impactY) <= this.splash) {
             e.takeDamage(this.damage);
+            damageNumbers.push(new DamageNumber(e.x, e.y - e.radius - 14, this.damage));
           }
         }
       } else if (!this.target.dead) {
         this.target.takeDamage(this.damage);
+        damageNumbers.push(new DamageNumber(this.target.x, this.target.y - this.target.radius - 14, this.damage));
       }
     }
 
@@ -401,6 +418,7 @@
     towerGrid: Array.from({ length: ROWS }, () => Array(COLS).fill(null)),
     enemies: [],
     projectiles: [],
+    damageNumbers: [],
     selectedTowerId: null,
     selectedTower: null,
     hoverCell: null,
@@ -566,6 +584,7 @@
     state.towerGrid = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
     state.enemies = [];
     state.projectiles = [];
+    state.damageNumbers = [];
     state.selectedTowerId = null;
     state.selectedTower = null;
     state.spawnedThisWave = 0;
@@ -627,9 +646,14 @@
     }
 
     for (const p of state.projectiles) {
-      p.update(dt, state.enemies);
+      p.update(dt, state.enemies, state.damageNumbers);
     }
     state.projectiles = state.projectiles.filter(p => !p.done);
+
+    for (const dn of state.damageNumbers) {
+      dn.update(dt);
+    }
+    state.damageNumbers = state.damageNumbers.filter(dn => dn.life > 0);
 
     // Re-check deaths/rewards caused by projectile hits this frame
     for (const enemy of state.enemies) {
@@ -761,6 +785,28 @@
     screenCtx.imageSmoothingEnabled = false;
     screenCtx.clearRect(0, 0, canvas.width, canvas.height);
     screenCtx.drawImage(pixelCanvas, 0, 0, pixelCanvas.width, pixelCanvas.height, 0, 0, canvas.width, canvas.height);
+
+    // text is drawn crisp on the real canvas (not pixelated) so small numbers stay legible
+    screenCtx.textAlign = 'center';
+    screenCtx.textBaseline = 'middle';
+
+    screenCtx.font = '7px Arial';
+    for (const enemy of state.enemies) {
+      const tx = enemy.x, ty = enemy.y - enemy.radius - 7.5;
+      screenCtx.fillStyle = 'rgba(0,0,0,0.85)';
+      screenCtx.fillText(`${Math.max(0, Math.ceil(enemy.hp))}`, tx + 0.6, ty + 0.6);
+      screenCtx.fillStyle = '#fff';
+      screenCtx.fillText(`${Math.max(0, Math.ceil(enemy.hp))}`, tx, ty);
+    }
+
+    screenCtx.font = 'bold 13px Georgia, serif';
+    for (const dn of state.damageNumbers) {
+      const alpha = Math.max(0, dn.life / dn.maxLife);
+      screenCtx.fillStyle = `rgba(0,0,0,${alpha * 0.85})`;
+      screenCtx.fillText(`-${dn.value}`, dn.x + 0.6, dn.y + 0.6);
+      screenCtx.fillStyle = `rgba(255,120,90,${alpha})`;
+      screenCtx.fillText(`-${dn.value}`, dn.x, dn.y);
+    }
   }
 
   // ---------- Main loop ----------
